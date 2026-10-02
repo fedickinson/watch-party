@@ -1,160 +1,88 @@
-# Second Act Studios presents: Oscar Party 26
+# Watch Party
 
-**Real-time multiplayer Oscar party game, designed, built, and shipped in a weekend for the 98th Academy Awards.**
+Watch Party turns watching a show together into a shared game on everyone's phone. Make predictions before the action, mark moments as they happen, and follow a leaderboard that changes with the room's results. It started with the 2026 Oscars and now includes a House of the Dragon season-finale experience. The engine supports scheduled awards results and host-declared story events, with versioned show packs for new broadcasts and episodes. The current interface is themed around House of the Dragon; some legacy content and game terminology still come from the Oscars.
 
-> Demo video coming soon.
+## What it does
 
----
+### For the host
 
-## Teaser Page
+1. **Bring everyone into one room.** Create a room and share its four-letter code. Guests join from their own browsers.
+2. **Get ready together.** Start the pre-show game when everyone is there. Depending on the room's show pack, players draft an identity, choose a shared faction, or go straight to predictions. The default story game includes a dragon draft that establishes identity without restricting anyone's predictions.
+3. **Run the evening.** Start the shared episode clock and use the host controls to declare story events as they happen. Scheduled-results rooms also have winner, tie, and spotlight controls. Recorded outcomes drive scoring across connected phones.
+4. **Close the live game.** Move everyone to results. Live results remain provisional until an operator reviews and applies a settlement through the repository's tooling, preserving the final outcomes and scoring inputs.
 
-The invite page sent to players before the ceremony. Built as a standalone HTML file using the same design system as the app.
+### For guests
 
-Open `teaser.html` in a browser, or [view it live on GitHub Pages](https://fedickinson.github.io/watch-party/teaser.html).
+1. **Join with the room code.** Choose a display name and avatar. There is no account signup; the browser remembers your seat.
+2. **Put your beliefs on the board.** In the story game, spend a fixed number of prediction slots on authored possibilities across the whole cast. You can back any available story beat, regardless of your drafted identity.
+3. **Play along while watching.** Tap moments on your personal bingo card, talk in the room chat, and watch the standings change. When a story beat resolves, its point pot is split among the players who backed it. A lone correct believer receives the full pot.
+4. **Keep the evening.** Open shared room results or an individual recap through public links that do not require a player session.
 
----
+AI characters can add reactions to the chat when generation is configured. Their lines use a shared grounding and review pipeline. New show packs can define their own cast; ongoing live reactions for those packs run through the companion daemon rather than the browser alone.
 
-## The Experience
+The app accompanies the broadcast. It does not stream the show.
 
-Picture four friends on their phones, huddled around the same TV, drafting actors and films before the broadcast starts.
+## How it's built
 
-As winners are announced live, the leaderboard shifts in real-time. Points cascade through confidence picks, draft rosters, and bingo cards simultaneously.
+- **React 19, TypeScript, and Vite** for the browser app, with React Router for navigation.
+- **Supabase Postgres and Realtime** for persistent game state and multiplayer updates.
+- **Tailwind CSS v4 and Framer Motion** for styling and motion, with Lucide icons.
+- **Anthropic's API** for optional AI commentary, accessed through a serverless proxy in production.
+- **Vitest** for deterministic game logic and proxy checks; TypeScript operator scripts for database verification, show-pack authoring, and settlement.
 
-Four AI companions live in the group chat: one delivers clean verdicts after every category, one connects everything to her 21 nominations, one roasts whoever is in last place, and one is having the time of his life without fully understanding the game.
+### Architecture
 
-When the Best Picture envelope opens, every phone in the room lights up.
+**Components and state.** Route pages cover the lobby, draft, predictions, live game, host controls, and recaps. Components render the interface, hooks handle database reads and subscriptions, and pure functions in `src/lib/` calculate scores and game rules. React context holds the current room and player; local storage restores the player seat after a refresh.
 
----
+**Multiplayer data flow.** The browser reads and writes directly to Supabase, including Postgres functions for atomic game commands. Database changes travel back through Realtime subscriptions. Shared navigation follows the persisted room phase, so a host transition moves connected players through the same game flow.
 
-## Tech Stack
-
-- **React 19 + TypeScript + Vite**: UI framework, type safety, and dev/build tooling
-- **Supabase**: hosted Postgres database, WebSocket-based Realtime sync, and Row Level Security for auth
-- **Tailwind CSS v4 + Framer Motion**: styling and animations
-- **Anthropic Claude API**: powers the four AI chat companions during the live ceremony
-- **lucide-react + canvas-confetti**: icons and winner celebration effects
-- **Recharts + jsPDF**: score timeline charts and post-ceremony recap PDF export
-
----
-
-## Architecture
-
-**No backend server.** This was a deliberate choice for a one-night app with an unpredictable spike: four people playing for three hours, then never again. A REST API would mean a server to provision, deploy, and keep alive for exactly one evening. Supabase eliminates that entirely.
-
-**React talks directly to Supabase.** The frontend talks to Supabase over HTTPS and WebSockets, with no middleware, no proxy, and no API routes. Reads, writes, and real-time subscriptions all flow through the Supabase JS client in the browser.
-
-**Multiplayer via Realtime.** Supabase Realtime runs WebSocket subscriptions on top of Postgres logical replication. When the host confirms a winner, the DB row updates and every connected client receives the change within milliseconds. No polling, no manual broadcast, no shared server state to manage.
-
-**Authorization at the database layer.** Row Level Security policies live in Postgres itself. There is no token validation code, no middleware stack, no auth service to maintain. The database enforces who can read and write what.
-
-**The full multiplayer loop:**
-
-```
-User action -> Supabase write -> Realtime broadcast -> all clients update state -> React re-renders
+```text
+Player action -> Supabase write -> Realtime update -> client state -> React render
 ```
 
-That single pattern handles every phase transition, every winner announcement, every score update, and every bingo mark in the app.
+**Identity and authorization.** Guest identity is a room seat, not a verified account. Postgres Row Level Security, grants, and guarded database functions govern access. Room creation issues a private operator capability for host commands. Public recaps are intentionally readable without joining.
 
----
+**Data model.** Rooms bind to versioned show packs containing entities, predictions, story beats, bingo content, and commentary contracts. Player picks and marks belong to the game record. Room-specific declarations record live outcomes; settlement records preserve canonical results separately from provisional play. Explicit game contracts support both the legacy awards scoring model and whole-cast story predictions.
 
-## Three Games
+**Hosting.** Vercel serves the frontend and the Anthropic proxy; Supabase hosts the database and Realtime service. There is no standalone application server for multiplayer. The proxy keeps the model credential on the server and adds request validation and rate limits.
 
-**1. Ensemble Draft**
-Snake draft where players claim actors and films from the year's nominees. Points accumulate automatically when your picks win. No manual scoring needed.
+## Current scope
 
-**2. Prestige Picks**
-Predict the winner for all 24 categories and assign confidence values 1-24, each used exactly once. Max confidence on a longshot win is the fastest way to flip the leaderboard.
+The default local catalog and much of the interface are House of the Dragon-specific. Additional shows require authored content and operator activation, not just a title change or a show picker.
 
-**3. Oscars Bingo**
-Randomized 5x5 cards filled with ceremony moments: acceptance speech clichés, camera cuts, host bits. Subjective squares require host confirmation. Colored bands highlight completed bingo lines in real-time.
+The repository retains Oscars film data, ensemble scoring, confidence-pick logic, and scheduled winner controls. The old confidence-pick screen is not wired into the current router: the prediction route opens story convictions or legacy beat activation instead.
 
----
+AI witness tooling proposes events for human review; it does not independently declare results. Season-long campaigns and cross-episode standings are not implemented.
 
-## AI Companions
+## Run it locally
 
-Four characters live in the group chat throughout the ceremony.
-
-**The Academy** announces every winner first: factual, clean, with the rare editorial flourish of someone who has been on air for thirty years.
-
-**Meryl** arrives with context, name-drops, and finds a way to connect every category to one of her 21 nominations.
-
-**Nikki** roasts your picks because she is nervous. She hosted the Globes and has opinions about everyone in that room.
-
-**Will** is an enthusiastic outsider who occasionally does not understand why bingo and a snake draft are happening at the same time but is absolutely thrilled about it.
-
-All four are powered by Claude Sonnet via a serverless Vercel proxy.
-
----
-
-## Run Locally
-
-**Prerequisites:** Node 20+, Docker, and the [Supabase CLI](https://supabase.com/docs/guides/cli).
+Requires Node.js 20+, Docker, and the Supabase CLI.
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/fedickinson/watch-party.git
 cd watch-party
 npm install
-supabase start   # Postgres, PostgREST and Realtime in Docker, schema and content included
+supabase start
+supabase status
 ```
 
-That gives you a complete database locally — the full schema from
-`supabase/migrations/00000000000000_baseline.sql` plus the authored game content from
-`supabase/seed.sql`. No hosted project required, and nothing you do can reach production.
+The local Supabase stack applies the migrations and loads `supabase/seed.sql`, which contains authored content without player history.
 
-Copy the env template and fill in your credentials:
+Create an ignored `.env.local` file. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from the local API URL and anon key reported by `supabase status`. The browser uses these variables directly, so explicitly point them at your local stack. The existing `.env.local.example` points at a hosted project and should not be copied unchanged for local development.
 
-```bash
-cp .env.local.example .env.local
-```
-
-```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-
-# Optional, only required for AI companions
-VITE_ANTHROPIC_API_KEY=sk-ant-...
-```
+For optional AI reactions, configure `ANTHROPIC_API_KEY` in that file. Vite's development proxy reads it on the server; do not give it a `VITE_` prefix. AI generation calls an external paid API.
 
 ```bash
 npm run dev
 ```
 
-Open `http://localhost:5173`. Create a room, share the 4-character code, and join from a second device or browser tab to test multiplayer.
+Open [the local app](http://localhost:5173/). Create a room, then join with its code from a separate browser profile to try multiplayer without replacing the host's stored seat. The default experience uses the seeded House of the Dragon catalog.
 
----
-
-## Room Flow
-
-```
-lobby -> ensemble -> prestige -> live (with bingo) -> finished
+```bash
+npm run build
+npm test
 ```
 
-Each phase transition is a single DB write. The host advances the room; all players navigate automatically via Realtime subscription.
+The build checks types and produces the frontend bundle. Tests cover deterministic logic and guards, not browser layout or end-to-end Realtime behavior.
 
----
-
-## Project Structure
-
-```
-src/
-  components/    - UI components organized by feature
-  context/       - GameContext: room + player identity (localStorage)
-  data/          - Static config: avatars, bingo squares, AI companions
-  hooks/         - Supabase orchestration (fetch + subscribe + state)
-  lib/           - Pure functions: scoring, draft logic, bingo detection
-  pages/         - Route-level components
-  types/         - Supabase row types + derived game types
-```
-
-Pure functions live in `lib/` with no React or Supabase imports. Side effects live in `hooks/`. This separation keeps the scoring and game logic unit-testable and the components thin.
-
----
-
-## Links
-
-- [Improvements After Live Testing](./IMPROVEMENTS.md)
-- [Product Roadmap](./ROADMAP.md)
-
----
-
-*A Second Act Studios production. Built with love for the 98th Academy Awards, March 2026.*
+See the [show-pack guide](show-packs/README.md) for authoring, the [roadmap](ROADMAP.md) for planned work, and the [runbook](RUNBOOK.md) for operation and settlement.
