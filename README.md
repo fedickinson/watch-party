@@ -10,7 +10,7 @@
 
 The invite page sent to players before the ceremony. Built as a standalone HTML file using the same design system as the app.
 
-Open `teaser.html` in a browser, or [view it live on GitHub Pages](https://fedickinson.github.io/oscar-party-26/teaser.html).
+Open `teaser.html` in a browser, or [view it live on GitHub Pages](https://fedickinson.github.io/watch-party/teaser.html).
 
 ---
 
@@ -92,7 +92,7 @@ All four are powered by Claude Sonnet via a serverless Vercel proxy.
 
 ```bash
 git clone <this-repo>
-cd oscar-party-26
+cd watch-party
 npm install
 supabase start   # Postgres, PostgREST and Realtime in Docker, schema and content included
 ```
